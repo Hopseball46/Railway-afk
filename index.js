@@ -1,8 +1,3 @@
-Hier ist noch einmal der komplette, bereinigte Code für deine index.js, bei dem der Fehler mit den doppelten Flags im microsoft_oauth-Event behoben ist.
-
-Ersetze einfach den gesamten Inhalt deiner index.js auf GitHub mit diesem Code:
-
-JavaScript
 require('dotenv').config();
 const { Client, GatewayIntentBits, InteractionType, MessageFlags } = require('discord.js');
 const { createBot } = require('mineflayer');
