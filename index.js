@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, InteractionType, MessageFlags } = require('discord.js');
 const { createBot } = require('mineflayer');
 const http = require('http');
+const dns = require('dns'); // Fügt das DNS-Modul sauber hinzu
 
 // Kleiner Webserver für Railway, damit das Deployment aktiv bleibt
 const PORT = process.env.PORT || 3000;
@@ -54,64 +55,70 @@ client.on('interactionCreate', async (interaction) => {
         let hasResponded = false;
         let codeSent = false;
 
-        const userBot = createBot({
-            host: process.env.SERVER_IP,
-            version: process.env.MINECRAFT_VERSION || '1.21.1',
-            auth: 'microsoft',
-            dontPersist: true
-        });
+        // Manuelle DNS-Auflösung, damit Railway die Server-IP direkt findet
+        dns.lookup(process.env.SERVER_IP, (err, address) => {
+            const targetHost = err ? process.env.SERVER_IP : address;
+            console.log(`Verbinde mit Minecraft-Server IP: ${targetHost}`);
 
-        // Event: Login erfolgreich (wird nach Microsoft-Bestätigung gefeuert)
-        userBot.on('login', () => {
-            if (!hasResponded) {
-                hasResponded = true;
-                interaction.editReply({ content: '🔄 Microsoft-Login erfolgreich! Verbinde jetzt zum Minecraft-Server...' }).catch(() => {});
-            }
-        });
+            const userBot = createBot({
+                host: targetHost,
+                version: process.env.MINECRAFT_VERSION || '1.21.1',
+                auth: 'microsoft',
+                dontPersist: true
+            });
 
-        // Event: Microsoft verlangt Code-Eingabe
-        userBot.on('microsoft_oauth', (deviceCode) => {
-            if (!codeSent) {
-                codeSent = true;
-                interaction.followUp({
-                    content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
-                    flags: MessageFlags.Ephemeral
-                }).catch(err => console.error('Discord Fehler:', err));
-            }
-        });
-
-        // Event: Bot ist auf dem Server gelandet
-        userBot.on('spawn', async () => {
-            if (activeBots.has(userId) && activeBots.get(userId).jumping) return;
-
-            const interval = setInterval(() => {
-                if (userBot.entity) {
-                    userBot.setControlState('jump', true);
-                    setTimeout(() => { if (userBot.entity) userBot.setControlState('jump', false); }, 500);
+            // Event: Login erfolgreich
+            userBot.on('login', () => {
+                if (!hasResponded) {
+                    hasResponded = true;
+                    interaction.editReply({ content: '🔄 Microsoft-Login erfolgreich! Verbinde jetzt zum Minecraft-Server...' }).catch(() => {});
                 }
-            }, 2000);
+            });
 
-            activeBots.set(userId, { bot: userBot, interval: interval, jumping: true });
+            // Event: Microsoft verlangt Code-Eingabe
+            userBot.on('microsoft_oauth', (deviceCode) => {
+                if (!codeSent) {
+                    codeSent = true;
+                    interaction.followUp({
+                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
+                        flags: MessageFlags.Ephemeral
+                    }).catch(err => console.error('Discord Fehler:', err));
+                }
+            });
 
-            await interaction.followUp({ content: `✅ Dein Bot hat den Server betreten!`, flags: MessageFlags.Ephemeral }).catch(() => {});
-            await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
-        });
+            // Event: Bot ist auf dem Server gelandet
+            userBot.on('spawn', async () => {
+                if (activeBots.has(userId) && activeBots.get(userId).jumping) return;
 
-        // Fehlerbehandlung
-        userBot.on('error', (err) => {
-            console.error('Mineflayer Fehler:', err);
-            if (activeBots.has(userId)) {
-                clearInterval(activeBots.get(userId).interval);
-                activeBots.delete(userId);
-            }
-        });
+                const interval = setInterval(() => {
+                    if (userBot.entity) {
+                        userBot.setControlState('jump', true);
+                        setTimeout(() => { if (userBot.entity) userBot.setControlState('jump', false); }, 500);
+                    }
+                }, 2000);
 
-        userBot.on('end', () => {
-            console.log('Bot-Verbindung beendet.');
-            if (activeBots.has(userId)) {
-                clearInterval(activeBots.get(userId).interval);
-                activeBots.delete(userId);
-            }
+                activeBots.set(userId, { bot: userBot, interval: interval, jumping: true });
+
+                await interaction.followUp({ content: `✅ Dein Bot hat den Server betreten!`, flags: MessageFlags.Ephemeral }).catch(() => {});
+                await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
+            });
+
+            // Fehlerbehandlung
+            userBot.on('error', (err) => {
+                console.error('Mineflayer Fehler:', err);
+                if (activeBots.has(userId)) {
+                    clearInterval(activeBots.get(userId).interval);
+                    activeBots.delete(userId);
+                }
+            });
+
+            userBot.on('end', () => {
+                console.log('Bot-Verbindung beendet.');
+                if (activeBots.has(userId)) {
+                    clearInterval(activeBots.get(userId).interval);
+                    activeBots.delete(userId);
+                }
+            });
         });
     }
 });
