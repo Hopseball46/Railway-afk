@@ -1,13 +1,14 @@
 {
   "name": "minecraft-afk-bot",
   "version": "1.0.0",
+  "description": "Minecraft AFK Bot über Discord",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
-    "mineflayer": "^4.20.0",
+    "mineflayer": "^4.24.0",
     "dotenv": "^16.4.5"
   }
 }
