@@ -4,7 +4,6 @@ const { createBot } = require('mineflayer');
 const http = require('http');
 const dns = require('dns');
 
-// Webserver für Railway
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -47,7 +46,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', flags: MessageFlags.Ephemeral });
         }
 
-        // Wir starten mit einer privaten Denkpause
+        // Wir starten die Denkpause
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         let codeSent = false;
@@ -63,16 +62,21 @@ client.on('interactionCreate', async (interaction) => {
                 dontPersist: true
             });
 
-            // Event: Microsoft verlangt Code-Eingabe (Per editReply – wie es vorher ging!)
+            // Das Microsoft-Event mit Doppel-Sicherung!
             userBot.on('microsoft_oauth', async (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
                     console.log(`Sende Code an Discord: ${deviceCode.user_code}`);
                     
-                    // Verwandelt das "Starte den Bot..." direkt in den Code um
-                    await interaction.editReply({
-                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
-                    }).catch(err => console.error('Discord Fehler beim Editieren:', err));
+                    const messageContent = `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``;
+
+                    // Versuch 1: Die bestehende "Denkt nach"-Nachricht ändern
+                    interaction.editReply({ content: messageContent })
+                        .catch(() => {
+                            // Versuch 2: Falls Discord die Verbindung verloren hat, schicken wir es als normale Nachricht in den Channel!
+                            console.log("editReply fehlgeschlagen, sende normale Nachricht...");
+                            interaction.channel.send({ content: messageContent }).catch(err => console.error(err));
+                        });
                 }
             });
 
@@ -87,8 +91,6 @@ client.on('interactionCreate', async (interaction) => {
                 }, 2000);
 
                 activeBots.set(userId, { bot: userBot, interval: interval, jumping: true });
-                
-                // Für alle sichtbar im Channel posten
                 await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
             });
 
