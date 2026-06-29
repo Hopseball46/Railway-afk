@@ -4,7 +4,6 @@ const { createBot } = require('mineflayer');
 const http = require('http');
 const dns = require('dns');
 
-// Kleiner Webserver für Railway, damit das Deployment aktiv bleibt
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -21,13 +20,10 @@ const client = new Client({
     ]
 });
 
-// Map, um aktive Minecraft-Bots pro Discord-User zu speichern
 const activeBots = new Map();
 
 client.once('ready', async () => {
     console.log('✅ Discord Bot ist online auf Wispbyte!');
-    
-    // Slash Command registrieren
     const guildId = client.guilds.cache.first()?.id;
     if (guildId) {
         const guild = client.guilds.cache.get(guildId);
@@ -50,10 +46,9 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', flags: MessageFlags.Ephemeral });
         }
 
-        // Wir sagen Discord sofort, dass wir etwas Zeit brauchen (Nachricht ist privat)
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        // 1. Sofort antworten, damit Discord nicht abstürzt
+        await interaction.reply({ content: '⏳ Starte den Bot und fordere Code an...', flags: MessageFlags.Ephemeral });
 
-        let hasResponded = false;
         let codeSent = false;
 
         dns.lookup(process.env.SERVER_IP, (err, address) => {
@@ -67,27 +62,19 @@ client.on('interactionCreate', async (interaction) => {
                 dontPersist: true
             });
 
-            // Event: Login erfolgreich
-            userBot.on('login', () => {
-                if (!hasResponded) {
-                    hasResponded = true;
-                    interaction.editReply({ content: '🔄 Microsoft-Login erfolgreich! Verbinde jetzt zum Minecraft-Server...' }).catch(() => {});
-                }
-            });
-
-            // Event: Microsoft verlangt Code-Eingabe (Fehlersichere Version ohne doppelte Flags)
+            // Event: Microsoft verlangt Code-Eingabe (NUR FÜR DICH SICHTBAR)
             userBot.on('microsoft_oauth', (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
-                    console.log(`Sende Code an Discord: ${deviceCode.user_code}`);
                     
-                    interaction.editReply({
-                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
+                    // Schickt den Code als neue, geheime Nachricht in den Channel
+                    interaction.followUp({
+                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
+                        flags: MessageFlags.Ephemeral
                     }).catch(err => console.error('Discord Fehler beim Senden des Codes:', err));
                 }
             });
 
-            // Event: Bot ist auf dem Server gelandet
             userBot.on('spawn', async () => {
                 if (activeBots.has(userId) && activeBots.get(userId).jumping) return;
 
@@ -99,12 +86,11 @@ client.on('interactionCreate', async (interaction) => {
                 }, 2000);
 
                 activeBots.set(userId, { bot: userBot, interval: interval, jumping: true });
-
-                // Öffentlich im Channel für alle sichtbar
+                
+                // Das hier sehen wieder alle (damit man weiß, dass du da bist)
                 await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
             });
 
-            // Fehlerbehandlung
             userBot.on('error', (err) => {
                 console.error('Mineflayer Fehler:', err);
                 if (activeBots.has(userId)) {
