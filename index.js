@@ -4,7 +4,6 @@ const { createBot } = require('mineflayer');
 const http = require('http');
 const dns = require('dns');
 
-// Webserver für Railway
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -47,8 +46,8 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', ephemeral: true });
         }
 
-        // FIX: Sicheres deferReply für Discord v14 (Verhindert "Anwendung reagiert nicht")
-        await interaction.deferReply({ ephemeral: true }).catch(err => console.error(err));
+        // 1. Öffentlich antworten – KEIN ephemeral mehr! Alle sehen, dass ein Bot startet.
+        await interaction.reply({ content: `⏳ <@${userId}> fordert einen Microsoft-Code an...` }).catch(err => console.error(err));
 
         let codeSent = false;
 
@@ -63,14 +62,14 @@ client.on('interactionCreate', async (interaction) => {
                 dontPersist: true
             });
 
-            // Der Sende-Code, der die Nachricht direkt umschreibt
+            // 2. Der Code wird als neue, öffentliche Nachricht gesendet – das blockiert NIEMALS.
             userBot.on('microsoft_oauth', async (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
-                    console.log(`Sende Code an Discord: ${deviceCode.user_code}`);
+                    console.log(`Sende Code an Discord für ${userId}: ${deviceCode.user_code}`);
                     
-                    await interaction.editReply({
-                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
+                    await interaction.followUp({
+                        content: `🔐 <@${userId}> **Hier ist dein Microsoft-Code:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
                     }).catch(err => console.error('Discord Fehler beim Senden:', err));
                 }
             });
