@@ -50,11 +50,12 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', flags: MessageFlags.Ephemeral });
         }
 
-        // Wir nehmen das deferReply hier weg, damit Discord nicht blockiert!
+        // Wir sagen Discord sofort, dass wir etwas Zeit brauchen
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
         let hasResponded = false;
         let codeSent = false;
 
-        // Manuelle DNS-Auflösung gegen den Railway ENOTFOUND-Fehler
         dns.lookup(process.env.SERVER_IP, (err, address) => {
             const targetHost = err ? process.env.SERVER_IP : address;
             console.log(`Verbinde mit Minecraft-Server IP: ${targetHost}`);
@@ -70,21 +71,14 @@ client.on('interactionCreate', async (interaction) => {
             userBot.on('login', () => {
                 if (!hasResponded) {
                     hasResponded = true;
-                    // Falls der Code schon gesendet wurde, nutzen wir followUp für das Update
-                    if (codeSent) {
-                        interaction.followUp({ content: '🔄 Microsoft-Login erfolgreich! Verbinde jetzt zum Minecraft-Server...', flags: MessageFlags.Ephemeral }).catch(() => {});
-                    } else {
-                        interaction.reply({ content: '🔄 Microsoft-Login erfolgreich! Verbinde jetzt zum Minecraft-Server...', flags: MessageFlags.Ephemeral }).catch(() => {});
-                    }
+                    interaction.editReply({ content: '🔄 Microsoft-Login erfolgreich! Verbinde jetzt zum Minecraft-Server...' }).catch(() => {});
                 }
             });
 
-     // Event: Microsoft verlangt Code-Eingabe
+            // Event: Microsoft verlangt Code-Eingabe (Hier fix integriert)
             userBot.on('microsoft_oauth', (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
-                    
-                    // Wir überschreiben das "denkt nach..." direkt mit dem Code!
                     interaction.editReply({
                         content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
                         flags: MessageFlags.Ephemeral
@@ -105,7 +99,7 @@ client.on('interactionCreate', async (interaction) => {
 
                 activeBots.set(userId, { bot: userBot, interval: interval, jumping: true });
 
-                await interaction.followUp({ content: `✅ Dein Bot hat den Server betreten!`, flags: MessageFlags.Ephemeral }).catch(() => {});
+                // Öffentlich im Channel für alle sichtbar
                 await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
             });
 
