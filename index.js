@@ -2,7 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, InteractionType, MessageFlags } = require('discord.js');
 const { createBot } = require('mineflayer');
 const http = require('http');
-const dns = require('dns'); // Fügt das DNS-Modul sauber hinzu
+const dns = require('dns');
 
 // Kleiner Webserver für Railway, damit das Deployment aktiv bleibt
 const PORT = process.env.PORT || 3000;
@@ -50,12 +50,13 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', flags: MessageFlags.Ephemeral });
         }
 
+        // Discord sagen, dass der Bot kurz "nachdenkt"
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         let hasResponded = false;
         let codeSent = false;
 
-        // Manuelle DNS-Auflösung, damit Railway die Server-IP direkt findet
+        // Manuelle DNS-Auflösung gegen den Railway ENOTFOUND-Fehler
         dns.lookup(process.env.SERVER_IP, (err, address) => {
             const targetHost = err ? process.env.SERVER_IP : address;
             console.log(`Verbinde mit Minecraft-Server IP: ${targetHost}`);
@@ -75,14 +76,14 @@ client.on('interactionCreate', async (interaction) => {
                 }
             });
 
-            // Event: Microsoft verlangt Code-Eingabe
+            // Event: Microsoft verlangt Code-Eingabe (HIER GEFIXT MIT editReply)
             userBot.on('microsoft_oauth', (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
-                    interaction.followUp({
+                    interaction.editReply({
                         content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
                         flags: MessageFlags.Ephemeral
-                    }).catch(err => console.error('Discord Fehler:', err));
+                    }).catch(err => console.error('Discord Fehler beim Senden des Codes:', err));
                 }
             });
 
