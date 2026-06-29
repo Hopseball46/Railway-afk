@@ -1,9 +1,10 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, InteractionType, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, MessageFlags } = require('discord.js');
 const { createBot } = require('mineflayer');
 const http = require('http');
 const dns = require('dns');
 
+// Webserver für Railway
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -23,7 +24,7 @@ const client = new Client({
 const activeBots = new Map();
 
 client.once('ready', async () => {
-    console.log('✅ Discord Bot ist online auf Wispbyte!');
+    console.log('✅ Discord Bot ist online!');
     const guildId = client.guilds.cache.first()?.id;
     if (guildId) {
         const guild = client.guilds.cache.get(guildId);
@@ -46,8 +47,8 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', flags: MessageFlags.Ephemeral });
         }
 
-        // 1. Sofort antworten, damit Discord nicht abstürzt
-        await interaction.reply({ content: '⏳ Starte den Bot und fordere Code an...', flags: MessageFlags.Ephemeral });
+        // Wir starten mit einer privaten Denkpause
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         let codeSent = false;
 
@@ -62,16 +63,16 @@ client.on('interactionCreate', async (interaction) => {
                 dontPersist: true
             });
 
-            // Event: Microsoft verlangt Code-Eingabe (NUR FÜR DICH SICHTBAR)
-            userBot.on('microsoft_oauth', (deviceCode) => {
+            // Event: Microsoft verlangt Code-Eingabe (Per editReply – wie es vorher ging!)
+            userBot.on('microsoft_oauth', async (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
+                    console.log(`Sende Code an Discord: ${deviceCode.user_code}`);
                     
-                    // Schickt den Code als neue, geheime Nachricht in den Channel
-                    interaction.followUp({
-                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
-                        flags: MessageFlags.Ephemeral
-                    }).catch(err => console.error('Discord Fehler beim Senden des Codes:', err));
+                    // Verwandelt das "Starte den Bot..." direkt in den Code um
+                    await interaction.editReply({
+                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
+                    }).catch(err => console.error('Discord Fehler beim Editieren:', err));
                 }
             });
 
@@ -87,7 +88,7 @@ client.on('interactionCreate', async (interaction) => {
 
                 activeBots.set(userId, { bot: userBot, interval: interval, jumping: true });
                 
-                // Das hier sehen wieder alle (damit man weiß, dass du da bist)
+                // Für alle sichtbar im Channel posten
                 await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
             });
 
