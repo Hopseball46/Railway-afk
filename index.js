@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const { createBot } = require('mineflayer');
 const http = require('http');
 const dns = require('dns');
@@ -43,11 +43,8 @@ client.on('interactionCreate', async (interaction) => {
         const userId = interaction.user.id;
 
         if (activeBots.has(userId)) {
-            return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', flags: MessageFlags.Ephemeral });
+            return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', ephemeral: true });
         }
-
-        // Wir starten die Denkpause
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         let codeSent = false;
 
@@ -62,21 +59,17 @@ client.on('interactionCreate', async (interaction) => {
                 dontPersist: true
             });
 
-            // Das Microsoft-Event mit Doppel-Sicherung!
+            // Hier antworten wir direkt beim ersten Versuch – ohne Umwege!
             userBot.on('microsoft_oauth', async (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
                     console.log(`Sende Code an Discord: ${deviceCode.user_code}`);
                     
-                    const messageContent = `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``;
-
-                    // Versuch 1: Die bestehende "Denkt nach"-Nachricht ändern
-                    interaction.editReply({ content: messageContent })
-                        .catch(() => {
-                            // Versuch 2: Falls Discord die Verbindung verloren hat, schicken wir es als normale Nachricht in den Channel!
-                            console.log("editReply fehlgeschlagen, sende normale Nachricht...");
-                            interaction.channel.send({ content: messageContent }).catch(err => console.error(err));
-                        });
+                    // Schickt den Code direkt als Antwort auf deinen Slash-Command
+                    await interaction.reply({
+                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
+                        ephemeral: true
+                    }).catch(err => console.error('Discord Fehler:', err));
                 }
             });
 
