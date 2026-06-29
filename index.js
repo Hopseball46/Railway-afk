@@ -50,9 +50,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', flags: MessageFlags.Ephemeral });
         }
 
-        // Discord sagen, dass der Bot kurz "nachdenkt"
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
+        // Wir nehmen das deferReply hier weg, damit Discord nicht blockiert!
         let hasResponded = false;
         let codeSent = false;
 
@@ -72,14 +70,21 @@ client.on('interactionCreate', async (interaction) => {
             userBot.on('login', () => {
                 if (!hasResponded) {
                     hasResponded = true;
-                    interaction.editReply({ content: '🔄 Microsoft-Login erfolgreich! Verbinde jetzt zum Minecraft-Server...' }).catch(() => {});
+                    // Falls der Code schon gesendet wurde, nutzen wir followUp für das Update
+                    if (codeSent) {
+                        interaction.followUp({ content: '🔄 Microsoft-Login erfolgreich! Verbinde jetzt zum Minecraft-Server...', flags: MessageFlags.Ephemeral }).catch(() => {});
+                    } else {
+                        interaction.reply({ content: '🔄 Microsoft-Login erfolgreich! Verbinde jetzt zum Minecraft-Server...', flags: MessageFlags.Ephemeral }).catch(() => {});
+                    }
                 }
             });
 
-            // Event: Microsoft verlangt Code-Eingabe (HIER GEFIXT MIT editReply)
+     // Event: Microsoft verlangt Code-Eingabe
             userBot.on('microsoft_oauth', (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
+                    
+                    // Wir überschreiben das "denkt nach..." direkt mit dem Code!
                     interaction.editReply({
                         content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
                         flags: MessageFlags.Ephemeral
