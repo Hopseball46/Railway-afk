@@ -2,8 +2,8 @@ require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { createBot } = require('mineflayer');
 const http = require('http');
-const dns = require('dns');
 
+// Webserver für Railway, damit das Deployment aktiv bleibt
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -46,63 +46,60 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', ephemeral: true });
         }
 
-        // 1. Öffentlich antworten – KEIN ephemeral mehr! Alle sehen, dass ein Bot startet.
-        await interaction.reply({ content: `⏳ <@${userId}> fordert einen Microsoft-Code an...` }).catch(err => console.error(err));
+        // Wir sagen Discord sofort Bescheid, dass der Prozess startet (Kein Hängenbleiben mehr!)
+        await interaction.reply({ content: `⏳ <@${userId}>, dein Microsoft-Code wird angefordert...` });
 
         let codeSent = false;
 
-        dns.lookup(process.env.SERVER_IP || 'play.friendlysmp.net', (err, address) => {
-            const targetHost = err ? (process.env.SERVER_IP || 'play.friendlysmp.net') : address;
-            console.log(`Verbinde mit Minecraft-Server IP: ${targetHost}`);
+        // Direktverbindung zur IP (spart wertvolle Sekunden)
+        const userBot = createBot({
+            host: process.env.SERVER_IP || 'play.friendlysmp.net',
+            version: process.env.MINECRAFT_VERSION || '1.21.1',
+            auth: 'microsoft',
+            dontPersist: true
+        });
 
-            const userBot = createBot({
-                host: targetHost,
-                version: process.env.MINECRAFT_VERSION || '1.21.1',
-                auth: 'microsoft',
-                dontPersist: true
-            });
+        // Sobald Microsoft den Code ausspuckt, senden wir ihn als völlig normale Nachricht
+        userBot.on('microsoft_oauth', async (deviceCode) => {
+            if (!codeSent) {
+                codeSent = true;
+                console.log(`Sende Code an Discord für ${userId}: ${deviceCode.user_code}`);
+                
+                // Unabhängig vom Slash-Command senden -> Das blockiert niemals!
+                await interaction.channel.send({
+                    content: `🔐 <@${userId}> **Hier ist dein Microsoft-Code:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
+                }).catch(err => console.error('Discord Fehler beim Senden:', err));
+            }
+        });
 
-            // 2. Der Code wird als neue, öffentliche Nachricht gesendet – das blockiert NIEMALS.
-            userBot.on('microsoft_oauth', async (deviceCode) => {
-                if (!codeSent) {
-                    codeSent = true;
-                    console.log(`Sende Code an Discord für ${userId}: ${deviceCode.user_code}`);
-                    
-                    await interaction.followUp({
-                        content: `🔐 <@${userId}> **Hier ist dein Microsoft-Code:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
-                    }).catch(err => console.error('Discord Fehler beim Senden:', err));
+        userBot.on('spawn', async () => {
+            if (activeBots.has(userId) && activeBots.get(userId).jumping) return;
+
+            const interval = setInterval(() => {
+                if (userBot.entity) {
+                    userBot.setControlState('jump', true);
+                    setTimeout(() => { if (userBot.entity) userBot.setControlState('jump', false); }, 500);
                 }
-            });
+            }, 2000);
 
-            userBot.on('spawn', async () => {
-                if (activeBots.has(userId) && activeBots.get(userId).jumping) return;
+            activeBots.set(userId, { bot: userBot, interval: interval, jumping: true });
+            await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
+        });
 
-                const interval = setInterval(() => {
-                    if (userBot.entity) {
-                        userBot.setControlState('jump', true);
-                        setTimeout(() => { if (userBot.entity) userBot.setControlState('jump', false); }, 500);
-                    }
-                }, 2000);
+        userBot.on('error', (err) => {
+            console.error('Mineflayer Fehler:', err);
+            if (activeBots.has(userId)) {
+                clearInterval(activeBots.get(userId).interval);
+                activeBots.delete(userId);
+            }
+        });
 
-                activeBots.set(userId, { bot: userBot, interval: interval, jumping: true });
-                await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
-            });
-
-            userBot.on('error', (err) => {
-                console.error('Mineflayer Fehler:', err);
-                if (activeBots.has(userId)) {
-                    clearInterval(activeBots.get(userId).interval);
-                    activeBots.delete(userId);
-                }
-            });
-
-            userBot.on('end', () => {
-                console.log('Bot-Verbindung beendet.');
-                if (activeBots.has(userId)) {
-                    clearInterval(activeBots.get(userId).interval);
-                    activeBots.delete(userId);
-                }
-            });
+        userBot.on('end', () => {
+            console.log('Bot-Verbindung beendet.');
+            if (activeBots.has(userId)) {
+                clearInterval(activeBots.get(userId).interval);
+                activeBots.delete(userId);
+            }
         });
     }
 });
