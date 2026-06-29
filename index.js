@@ -1,3 +1,8 @@
+Hier ist noch einmal der komplette, bereinigte Code für deine index.js, bei dem der Fehler mit den doppelten Flags im microsoft_oauth-Event behoben ist.
+
+Ersetze einfach den gesamten Inhalt deiner index.js auf GitHub mit diesem Code:
+
+JavaScript
 require('dotenv').config();
 const { Client, GatewayIntentBits, InteractionType, MessageFlags } = require('discord.js');
 const { createBot } = require('mineflayer');
@@ -50,7 +55,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', flags: MessageFlags.Ephemeral });
         }
 
-        // Wir sagen Discord sofort, dass wir etwas Zeit brauchen
+        // Wir sagen Discord sofort, dass wir etwas Zeit brauchen (Nachricht ist privat)
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         let hasResponded = false;
@@ -75,13 +80,14 @@ client.on('interactionCreate', async (interaction) => {
                 }
             });
 
-            // Event: Microsoft verlangt Code-Eingabe (Hier fix integriert)
+            // Event: Microsoft verlangt Code-Eingabe (Fehlersichere Version ohne doppelte Flags)
             userBot.on('microsoft_oauth', (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
+                    console.log(`Sende Code an Discord: ${deviceCode.user_code}`);
+                    
                     interaction.editReply({
-                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
-                        flags: MessageFlags.Ephemeral
+                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
                     }).catch(err => console.error('Discord Fehler beim Senden des Codes:', err));
                 }
             });
