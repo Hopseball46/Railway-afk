@@ -4,6 +4,7 @@ const { createBot } = require('mineflayer');
 const http = require('http');
 const dns = require('dns');
 
+// Webserver für Railway
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -46,10 +47,13 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', ephemeral: true });
         }
 
+        // FIX: Sicheres deferReply für Discord v14 (Verhindert "Anwendung reagiert nicht")
+        await interaction.deferReply({ ephemeral: true }).catch(err => console.error(err));
+
         let codeSent = false;
 
-        dns.lookup(process.env.SERVER_IP, (err, address) => {
-            const targetHost = err ? process.env.SERVER_IP : address;
+        dns.lookup(process.env.SERVER_IP || 'play.friendlysmp.net', (err, address) => {
+            const targetHost = err ? (process.env.SERVER_IP || 'play.friendlysmp.net') : address;
             console.log(`Verbinde mit Minecraft-Server IP: ${targetHost}`);
 
             const userBot = createBot({
@@ -59,17 +63,15 @@ client.on('interactionCreate', async (interaction) => {
                 dontPersist: true
             });
 
-            // Hier antworten wir direkt beim ersten Versuch – ohne Umwege!
+            // Der Sende-Code, der die Nachricht direkt umschreibt
             userBot.on('microsoft_oauth', async (deviceCode) => {
                 if (!codeSent) {
                     codeSent = true;
                     console.log(`Sende Code an Discord: ${deviceCode.user_code}`);
                     
-                    // Schickt den Code direkt als Antwort auf deinen Slash-Command
-                    await interaction.reply({
-                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``,
-                        ephemeral: true
-                    }).catch(err => console.error('Discord Fehler:', err));
+                    await interaction.editReply({
+                        content: `🔐 <@${userId}> **Bitte verifiziere dich bei Microsoft:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
+                    }).catch(err => console.error('Discord Fehler beim Senden:', err));
                 }
             });
 
