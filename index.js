@@ -1,3 +1,8 @@
+Hier ist der komplette, aktualisierte Code für deinen Bot.
+
+Ich habe die neuen Abfragen für Fehler (wie den ENOTFOUND-Fehler aus deinem Screenshot) und Kicks direkt eingebaut, damit der Bot alles ordentlich in deinen Discord-Kanal postet. Zudem nutzt er jetzt das dauerhafte Railway-Volume unter /tokens/.
+
+JavaScript
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { createBot } = require('mineflayer');
@@ -51,10 +56,10 @@ client.on('interactionCreate', async (interaction) => {
 
         let codeSent = false;
 
-        // Nutzt jetzt das dauerhafte Railway-Volume (ohne den Punkt am Anfang!)
+        // Nutzt das dauerhafte Railway-Volume
         const userBot = createBot({
             host: process.env.SERVER_IP || 'play.friendlysmp.net',
-            version: process.env.MINECRAFT_VERSION || '1.21.11',
+            version: process.env.MINECRAFT_VERSION || '1.21.1',
             auth: 'microsoft',
             profilesFolder: `/tokens/${userId}` 
         });
@@ -85,16 +90,41 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
         });
 
-        userBot.on('error', (err) => {
+        // Erweitertes Error-Handling für genaueres Feedback im Discord
+        userBot.on('error', async (err) => {
             console.error('Mineflayer Fehler:', err);
+            
+            let errorMsg = `❌ Fehler beim Starten des Bots von <@${userId}>.`;
+            
+            if (err.message.includes('banned')) {
+                errorMsg = `❌ <@${userId}>, dein Account ist auf diesem Server gebannt!`;
+            } else if (err.message.includes('whitelist')) {
+                errorMsg = `❌ <@${userId}>, du stehst nicht auf der Whitelist des Servers!`;
+            } else if (err.code === 'ENOTFOUND' || err.message.includes('EAI_AGAIN')) {
+                errorMsg = `❌ <@${userId}>, die IP \`${userBot.options.host}\` konnte nicht gefunden werden. (Server offline oder Tippfehler?)`;
+            } else if (err.code === 'ETIMEDOUT') {
+                errorMsg = `❌ <@${userId}>, Verbindung zum Server fehlgeschlagen (Timeout).`;
+            }
+
+            await interaction.channel.send({ content: errorMsg }).catch(console.error);
+
             if (activeBots.has(userId)) {
                 clearInterval(activeBots.get(userId).interval);
                 activeBots.delete(userId);
             }
         });
 
-        userBot.on('end', () => {
-            console.log('Bot-Verbindung beendet.');
+        // Feedback, wenn der Bot vom Server fliegt oder gekickt wird
+        userBot.on('end', async (reason) => {
+            console.log('Bot-Verbindung beendet. Grund:', reason);
+            
+            // Verhindert eine Nachricht, wenn der Bot absichtlich gestoppt wurde
+            if (reason && reason !== 'disconnect.quitting') {
+                await interaction.channel.send({ 
+                    content: `📴 <@${userId}>s Bot wurde vom Server getrennt!\n**Grund:** \`${reason}\`` 
+                }).catch(console.error);
+            }
+
             if (activeBots.has(userId)) {
                 clearInterval(activeBots.get(userId).interval);
                 activeBots.delete(userId);
