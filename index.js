@@ -46,34 +46,37 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', ephemeral: true });
         }
 
-        // Sofortige Rückmeldung an Discord
-        await interaction.reply({ content: `⏳ <@${userId}>, AFK-Bot wird gestartet...` });
+        // Wir sagen Discord sofort Bescheid, dass der Prozess startet (Kein Hängenbleiben/Anwendung reagiert nicht mehr!)
+        await interaction.deferReply();
 
         let codeSent = false;
 
-        // Nutzt das dauerhafte Railway-Volume
+        // Direktverbindung zur IP und Nutzung des dauerhaften Railway-Volumes (Speichert den Login-Token lokal ab)
         const userBot = createBot({
             host: process.env.SERVER_IP || 'play.friendlysmp.net',
             version: process.env.MINECRAFT_VERSION || '1.21.1',
             auth: 'microsoft',
-            profilesFolder: `/tokens/${userId}` 
+            profilesFolder: `/tokens/${userId}` // Erstellt einen eigenen Ordner für jeden Discord-User, um die Session zu speichern
         });
 
-        // Wird NUR aufgerufen, wenn KEIN gültiger Token gefunden wurde
+        // Sobald Microsoft den Code ausspuckt, senden wir ihn (Wird NUR aufgerufen, wenn KEIN gültiger Token gefunden wurde)
         userBot.on('microsoft_oauth', async (deviceCode) => {
             if (!codeSent) {
                 codeSent = true;
                 console.log(`Sende Code an Discord für ${userId}: ${deviceCode.user_code}`);
                 
-                await interaction.channel.send({
+                // Wir editieren die "Nachdenken"-Nachricht von oben -> Das blockiert niemals!
+                await interaction.editReply({
                     content: `🔐 <@${userId}> **Erstanmeldung erforderlich!**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\`\n*(Beim nächsten Mal lädt der Bot automatisch!)*`
                 }).catch(err => console.error('Discord Fehler beim Senden:', err));
             }
         });
 
+        // Sobald der Bot erfolgreich auf dem Minecraft-Server spawnt
         userBot.on('spawn', async () => {
             if (activeBots.has(userId) && activeBots.get(userId).jumping) return;
 
+            // Anti-AFK Kick: Der Bot springt alle 2 Sekunden kurz hoch
             const interval = setInterval(() => {
                 if (userBot.entity) {
                     userBot.setControlState('jump', true);
@@ -82,15 +85,18 @@ client.on('interactionCreate', async (interaction) => {
             }, 2000);
 
             activeBots.set(userId, { bot: userBot, interval: interval, jumping: true });
-            await interaction.channel.send({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` });
+            
+            // Wenn der Bot direkt joint (weil Token existiert), editieren wir die Nachricht im Kanal
+            await interaction.editReply({ content: `👋 <@${userId}>s AFK-Bot hat den Server betreten!` }).catch(console.error);
         });
 
-        // Erweitertes Error-Handling für genaueres Feedback im Discord
+        // Erweitertes Error-Handling für genaueres Feedback im Discord bei Fehlgeschlagener Verbindung
         userBot.on('error', async (err) => {
             console.error('Mineflayer Fehler:', err);
             
             let errorMsg = `❌ Fehler beim Starten des Bots von <@${userId}>.`;
             
+            // Filtert bekannte Minecraft- und Verbindungsfehler heraus
             if (err.message.includes('banned')) {
                 errorMsg = `❌ <@${userId}>, dein Account ist auf diesem Server gebannt!`;
             } else if (err.message.includes('whitelist')) {
@@ -101,8 +107,13 @@ client.on('interactionCreate', async (interaction) => {
                 errorMsg = `❌ <@${userId}>, Verbindung zum Server fehlgeschlagen (Timeout).`;
             }
 
-            await interaction.channel.send({ content: errorMsg }).catch(console.error);
+            // Fehlermeldung als Edit senden, falls der Bot gar nicht erst online kam
+            await interaction.editReply({ content: errorMsg }).catch(async () => {
+                // Falls editReply fehlschlägt (z.B. Interaction abgelaufen), senden wir eine normale Nachricht
+                await interaction.channel.send({ content: errorMsg }).catch(console.error);
+            });
 
+            // Räumt den Bot aus dem Speicher auf, damit man es neu versuchen kann
             if (activeBots.has(userId)) {
                 clearInterval(activeBots.get(userId).interval);
                 activeBots.delete(userId);
@@ -113,13 +124,21 @@ client.on('interactionCreate', async (interaction) => {
         userBot.on('end', async (reason) => {
             console.log('Bot-Verbindung beendet. Grund:', reason);
             
-            // Verhindert eine Nachricht, wenn der Bot absichtlich gestoppt wurde
+            // Verhindert eine Nachricht, wenn der Bot absichtlich gestoppt wurde (z.B. disconnect.quitting)
             if (reason && reason !== 'disconnect.quitting') {
+                let displayReason = reason;
+                
+                // Spezielle Erklärung für 'socketClosed' (wichtig bei verdeckten Banns oder Doppel-Logins)
+                if (reason === 'socketClosed') {
+                    displayReason = 'socketClosed (Verbindung abgebrochen – Du bist eventuell gebannt, bereits eingeloggt oder der Server blockiert den Bot)';
+                }
+
                 await interaction.channel.send({ 
-                    content: `📴 <@${userId}>s Bot wurde vom Server getrennt!\n**Grund:** \`${reason}\`` 
+                    content: `📴 <@${userId}>s Bot wurde vom Server getrennt!\n**Grund:** \`${displayReason}\`` 
                 }).catch(console.error);
             }
 
+            // Stoppt das Sprung-Intervall und löscht den Bot aus der aktiven Liste
             if (activeBots.has(userId)) {
                 clearInterval(activeBots.get(userId).interval);
                 activeBots.delete(userId);
