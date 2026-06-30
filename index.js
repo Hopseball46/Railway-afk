@@ -54,7 +54,7 @@ client.on('interactionCreate', async (interaction) => {
         // Nutzt jetzt das dauerhafte Railway-Volume (ohne den Punkt am Anfang!)
         const userBot = createBot({
             host: process.env.SERVER_IP || 'play.friendlysmp.net',
-            version: process.env.MINECRAFT_VERSION || '1.21.1',
+            version: process.env.MINECRAFT_VERSION || '1.21.11',
             auth: 'microsoft',
             profilesFolder: `/tokens/${userId}` 
         });
