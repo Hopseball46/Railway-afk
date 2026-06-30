@@ -1,8 +1,3 @@
-Hier ist der komplette, aktualisierte Code für deinen Bot.
-
-Ich habe die neuen Abfragen für Fehler (wie den ENOTFOUND-Fehler aus deinem Screenshot) und Kicks direkt eingebaut, damit der Bot alles ordentlich in deinen Discord-Kanal postet. Zudem nutzt er jetzt das dauerhafte Railway-Volume unter /tokens/.
-
-JavaScript
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const { createBot } = require('mineflayer');
