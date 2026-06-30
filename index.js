@@ -54,7 +54,7 @@ client.on('interactionCreate', async (interaction) => {
         // Direktverbindung zur IP und Nutzung des dauerhaften Railway-Volumes (Speichert den Login-Token lokal ab)
         const userBot = createBot({
             host: process.env.SERVER_IP || 'play.friendlysmp.net',
-            version: process.env.MINECRAFT_VERSION || '1.21.1',
+            version: process.env.MINECRAFT_VERSION || '1.21.11',
             auth: 'microsoft',
             profilesFolder: `/tokens/${userId}` // Erstellt einen eigenen Ordner für jeden Discord-User, um die Session zu speichern
         });
