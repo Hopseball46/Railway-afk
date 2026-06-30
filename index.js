@@ -46,28 +46,27 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Du hast bereits einen aktiven AFK-Bot!', ephemeral: true });
         }
 
-        // Wir sagen Discord sofort Bescheid, dass der Prozess startet (Kein Hängenbleiben mehr!)
-        await interaction.reply({ content: `⏳ <@${userId}>, dein Microsoft-Code wird angefordert...` });
+        // Sofortige Rückmeldung an Discord
+        await interaction.reply({ content: `⏳ <@${userId}>, AFK-Bot wird gestartet...` });
 
         let codeSent = false;
 
-        // Direktverbindung zur IP (spart wertvolle Sekunden)
+        // Nutzt jetzt das dauerhafte Railway-Volume (ohne den Punkt am Anfang!)
         const userBot = createBot({
             host: process.env.SERVER_IP || 'play.friendlysmp.net',
             version: process.env.MINECRAFT_VERSION || '1.21.1',
             auth: 'microsoft',
-            dontPersist: true
+            profilesFolder: `/tokens/${userId}` 
         });
 
-        // Sobald Microsoft den Code ausspuckt, senden wir ihn als völlig normale Nachricht
+        // Wird NUR aufgerufen, wenn KEIN gültiger Token gefunden wurde
         userBot.on('microsoft_oauth', async (deviceCode) => {
             if (!codeSent) {
                 codeSent = true;
                 console.log(`Sende Code an Discord für ${userId}: ${deviceCode.user_code}`);
                 
-                // Unabhängig vom Slash-Command senden -> Das blockiert niemals!
                 await interaction.channel.send({
-                    content: `🔐 <@${userId}> **Hier ist dein Microsoft-Code:**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\``
+                    content: `🔐 <@${userId}> **Erstanmeldung erforderlich!**\n1. Gehe auf: ${deviceCode.verification_uri}\n2. Code: \`${deviceCode.user_code}\`\n*(Beim nächsten Mal lädt der Bot automatisch!)*`
                 }).catch(err => console.error('Discord Fehler beim Senden:', err));
             }
         });
