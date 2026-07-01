@@ -4,7 +4,7 @@ const { createBot } = require('mineflayer');
 const http = require('http');
 
 // Webserver für Railway, damit das Deployment aktiv bleibt
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 25565;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Bot läuft!\n');
