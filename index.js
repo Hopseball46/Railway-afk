@@ -22,7 +22,7 @@ const client = new Client({
 
 const activeBots = new Map();
 // Host global definieren mit der korrekten .com Domain
-const serverHost = process.env.SERVER_IP || 'play.friendlysmp.com';
+const serverHost = process.env.SERVER_IP || 'mc.hypixel.net';
 
 client.once('ready', async () => {
     console.log('✅ Discord Bot ist online!');
